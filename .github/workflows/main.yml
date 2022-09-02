@@ -1,0 +1,50 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  Continuous_Integrations:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Docker Login
+        uses: docker/login-action@v2.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PWD }}
+
+      - name: Build and push Docker images
+        uses: docker/build-push-action@v3.1.1
+        with:
+          context: ./src
+          file: ./src/Dockerfile
+          push: true
+          tags: |
+            antoniodouglascaye/rotten-potatoes:latest
+            antoniodouglascaye/rotten-potatoes:${{ github.run_number }}
+  Continuous_Deployment:
+    needs: [Continuous_Integrations]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3 
+    
+      - name: Kubernetes Set Context
+        uses: Azure/k8s-set-context@v3.0
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.K8S_KUBECONFIG }}
+          
+      - name: Deploy to Kubernetes cluster
+        uses: Azure/k8s-deploy@v4
+        with:
+          manifests: |
+            k8s/deployment.yaml
+          images: antoniodouglascaye/rotten-potatoes:${{ github.run_number }}
+          
